@@ -1,0 +1,7 @@
+# ActWarden-local ignores (root .gitignore covers __pycache__ and /build/)
+runtime/build/
+python/.pytest_cache/
+python/*.egg-info/
+python/build/
+python/dist/
+*.mlxfn

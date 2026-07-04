@@ -1,0 +1,42 @@
+{
+  "spec_version": "1.0.0",
+  "generated_by": "actwarden.features reference packer (regenerate with this snippet on any spec change)",
+  "feature_names": [
+    "span_count_norm",
+    "tool_call_ratio",
+    "llm_call_ratio",
+    "error_rate",
+    "error_run_norm",
+    "tool_ngram_repeat_ratio",
+    "tool_entropy_norm",
+    "token_velocity_norm",
+    "cost_total_norm",
+    "cost_slope_norm",
+    "latency_p95_norm",
+    "retrieval_call_ratio",
+    "retrieval_low_conf_ratio",
+    "depth_max_norm",
+    "fanout_max_norm",
+    "stagnation_norm"
+  ],
+  "sessions": {
+    "sess-01": [
+      0.234375,
+      0.4666666666666667,
+      0.4666666666666667,
+      0.0,
+      0.0,
+      0.8,
+      0.0,
+      0.41125,
+      0.05600000000000001,
+      0.51,
+      0.5333333333333333,
+      0.0,
+      0.0,
+      0.125,
+      1.0,
+      0.9375
+    ]
+  }
+}

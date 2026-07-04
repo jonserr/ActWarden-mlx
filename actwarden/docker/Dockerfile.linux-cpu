@@ -1,0 +1,36 @@
+# ActWarden runtime — Linux CPU target (CI, small deployments).
+# Builds MLX from this tree with the CPU backend only. No cloud assumptions.
+# The image build IS the test gate: it runs the CLI on the fixture trace and
+# the full Python suite (feature parity + audit chain) against the freshly
+# built binary, so a parity break fails the build.
+# Status: written, not yet CI-verified; expect to iterate on BLAS packages.
+#
+#   docker build -f actwarden/docker/Dockerfile.linux-cpu -t actwarden:cpu .
+
+FROM ubuntu:24.04 AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build git ca-certificates \
+    libblas-dev liblapack-dev liblapacke-dev \
+    python3 python3-pytest \
+    && rm -rf /var/lib/apt/lists/*
+COPY . /src
+RUN cmake -S /src/actwarden/runtime -B /build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DMLX_BUILD_METAL=OFF \
+    && cmake --build /build -j
+
+# Smoke: end-to-end rules-only scoring of the fixture trace.
+RUN /build/actwarden \
+      --trace /src/actwarden/fixtures/traces/runaway_loop.jsonl \
+      --spec /src/actwarden/feature_spec/v1.json > /dev/null
+
+# Gate: golden-vector parity + audit-chain tests against this exact binary.
+RUN PYTHONPATH=/src/actwarden/python ACTWARDEN_CLI=/build/actwarden \
+      python3 -m pytest /src/actwarden/python/tests -q
+
+FROM ubuntu:24.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libblas3 liblapack3 liblapacke \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /build/actwarden /usr/local/bin/actwarden
+COPY actwarden/feature_spec /opt/actwarden/feature_spec
+ENTRYPOINT ["actwarden"]

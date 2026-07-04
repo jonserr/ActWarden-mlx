@@ -1,0 +1,51 @@
+{
+  "spec_version": "1.0.0",
+  "description": "Canonical ActWarden feature specification. This file is the single source of truth for feature semantics. The Python packer (actwarden/python/actwarden/features.py) is the reference implementation; the C++ packer (actwarden/runtime/src/feature_packer.cpp) must produce bit-identical ordering and value-identical results within 1e-6. Golden vectors in actwarden/fixtures/golden/ gate parity.",
+  "window": {
+    "max_spans": 64,
+    "ordering": "spans sorted ascending by (start_time_unix_nano, span_id); window = last max_spans spans of a session"
+  },
+  "normalization": {
+    "budget_usd": 1.0,
+    "token_rate_per_s": 500.0,
+    "latency_ref_ms": 30000.0,
+    "max_depth": 16,
+    "max_fanout": 8,
+    "max_error_run": 8,
+    "low_confidence_threshold": 0.3,
+    "loop_ngram": 3,
+    "entropy_ref_tools": 8,
+    "min_window_seconds": 0.001
+  },
+  "conventions": [
+    "All features are float32 and clamped to [0, 1] after computation unless stated otherwise.",
+    "window_seconds = (max end_time_unix_nano - min start_time_unix_nano) / 1e9, floored at min_window_seconds.",
+    "span duration_ms = (end_time_unix_nano - start_time_unix_nano) / 1e6.",
+    "p95 = sorted ascending durations, element at index ceil(0.95 * n) - 1 (no interpolation).",
+    "TOOL/LLM/RETRIEVER classification comes from Span.kind (mapped from openinference.span.kind at ingest)."
+  ],
+  "features": [
+    { "index": 0,  "name": "span_count_norm",          "definition": "count(spans in window) / window.max_spans" },
+    { "index": 1,  "name": "tool_call_ratio",          "definition": "count(kind==TOOL) / count(spans)" },
+    { "index": 2,  "name": "llm_call_ratio",           "definition": "count(kind==LLM) / count(spans)" },
+    { "index": 3,  "name": "error_rate",               "definition": "count(status_code==ERROR) / count(spans)" },
+    { "index": 4,  "name": "error_run_norm",           "definition": "longest consecutive run of ERROR spans in window order / max_error_run" },
+    { "index": 5,  "name": "tool_ngram_repeat_ratio",  "definition": "over the ordered sequence of tool.name for TOOL spans: 0 if fewer than loop_ngram tool calls, else 1 - unique_ngrams/total_ngrams for n=loop_ngram" },
+    { "index": 6,  "name": "tool_entropy_norm",        "definition": "Shannon entropy (bits) of tool.name distribution over TOOL spans / log2(entropy_ref_tools); 0 if no TOOL spans" },
+    { "index": 7,  "name": "token_velocity_norm",      "definition": "sum(llm.token_count.prompt + llm.token_count.completion) / window_seconds / token_rate_per_s" },
+    { "index": 8,  "name": "cost_total_norm",          "definition": "sum(actwarden.cost_usd) / budget_usd" },
+    { "index": 9,  "name": "cost_slope_norm",          "definition": "0.5 if count(spans) < 2, else clamp01(((cost(second half) - cost(first half)) / budget_usd + 1) / 2); halves split at floor(n/2) in window order" },
+    { "index": 10, "name": "latency_p95_norm",         "definition": "p95(span duration_ms) / latency_ref_ms" },
+    { "index": 11, "name": "retrieval_call_ratio",     "definition": "count(kind==RETRIEVER) / count(spans)" },
+    { "index": 12, "name": "retrieval_low_conf_ratio", "definition": "among RETRIEVER spans: fraction with max(retrieval.document_scores) < low_confidence_threshold; empty score lists count as low-confidence; 0 if no RETRIEVER spans" },
+    { "index": 13, "name": "depth_max_norm",           "definition": "max span depth / max_depth; depth = 1 + depth(parent) when parent_span_id resolves inside the window, else 1" },
+    { "index": 14, "name": "fanout_max_norm",          "definition": "max count of children (by parent_span_id, resolved within window) of any span / max_fanout" },
+    { "index": 15, "name": "stagnation_norm",          "definition": "(window_end - start of last novelty event) / (window_end - window_start); novelty event = first span in window with key kind+'\\x1f'+(tool.name if TOOL else name); 0 if window duration <= 0" }
+  ],
+  "risk_heads": [
+    { "index": 0, "name": "loop_risk",        "meaning": "runaway or repetitive tool/LLM loops" },
+    { "index": 1, "name": "cost_risk",        "meaning": "cost or token growth on track to exceed budget" },
+    { "index": 2, "name": "tool_misuse_risk", "meaning": "unsafe or anomalous tool usage patterns" },
+    { "index": 3, "name": "dead_end_risk",    "meaning": "no-progress planning, low-confidence retrieval cascades" }
+  ]
+}

@@ -1,0 +1,26 @@
+# ActWarden runtime — Linux CUDA target (server / scale-out scoring).
+# Builds MLX from this tree with the CUDA backend (MLX_BUILD_CUDA=ON).
+# Status: best-effort and NOT yet verified end to end; the MLX CUDA backend
+# is the newest backend and this image is expected to need iteration
+# (cuDNN/CCCL versions, arch flags). Kept honest on purpose.
+#
+#   docker build -f actwarden/docker/Dockerfile.linux-cuda -t actwarden:cuda .
+#   docker run --gpus all actwarden:cuda ...
+
+FROM nvidia/cuda:12.6.3-cudnn-devel-ubuntu24.04 AS build
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential cmake ninja-build git ca-certificates \
+    libblas-dev liblapack-dev liblapacke-dev \
+    && rm -rf /var/lib/apt/lists/*
+COPY . /src
+RUN cmake -S /src/actwarden/runtime -B /build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release -DMLX_BUILD_METAL=OFF -DMLX_BUILD_CUDA=ON \
+    && cmake --build /build -j
+
+FROM nvidia/cuda:12.6.3-cudnn-runtime-ubuntu24.04
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libblas3 liblapack3 liblapacke \
+    && rm -rf /var/lib/apt/lists/*
+COPY --from=build /build/actwarden /usr/local/bin/actwarden
+COPY actwarden/feature_spec /opt/actwarden/feature_spec
+ENTRYPOINT ["actwarden"]
