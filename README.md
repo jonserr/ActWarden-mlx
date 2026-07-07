@@ -30,7 +30,47 @@ The two planes agree through one versioned contract, `actwarden/feature_spec/v1.
 by golden-vector parity tests — train/serve skew is treated as a test failure, not a code review
 comment. Full design: [`docs/architecture/overview.md`](docs/architecture/overview.md).
 
-## Honest status
+## Overview
+
+```mermaid
+flowchart LR
+  subgraph Agent["Agent or tool workflow"]
+    Spans["OpenTelemetry-flavored spans\nJSONL today, OTLP later"]
+  end
+
+  subgraph Python["Python training plane"]
+    Replay["trace synthesis + replay"]
+    RefPacker["reference feature packer"]
+    Model["mlx.nn risk model"]
+    Export["export model.mlxfn"]
+  end
+
+  subgraph Contract["Versioned contract"]
+    Spec["feature_spec/v1.json"]
+    Golden["golden-vector parity tests"]
+  end
+
+  subgraph Runtime["C++ serving plane"]
+    Ingest["span ingestion"]
+    Window["per-session sliding window"]
+    Packer["feature packer"]
+    Scorer["MLX scorer\nor rules-only build"]
+    Policy["rules-first policy engine"]
+  end
+
+  Decision["Decision + reasons\ncontinue, require_approval, reduce_budget,\nblock_tool, switch_model, escalate"]
+  Audit["shadow mode + audit log"]
+
+  Spans --> Ingest --> Window --> Packer --> Scorer --> Policy --> Decision
+  Policy --> Audit
+  Replay --> RefPacker --> Model --> Export --> Scorer
+  Spec --> RefPacker
+  Spec --> Packer
+  Golden --> RefPacker
+  Golden --> Packer
+```
+
+## Status
 
 Working vertical slice, no model artifact yet. What exists and is test-verified today: the
 feature spec; the Python reference packer with golden vectors; **C++ feature packing at full
@@ -107,7 +147,7 @@ PYTHONPATH=actwarden/python python3 actwarden/examples/toy_agent.py /tmp/toy.jso
   --spec actwarden/feature_spec/v1.json --shadow --bench 1000
 ```
 
-## Deployment targets, honestly
+## Deployment targets
 
 | Target | Backend | Status |
 |---|---|---|
